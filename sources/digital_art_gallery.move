@@ -113,6 +113,18 @@ module digital_art_gallery::digital_art_gallery {
 
         object_table::add(&mut gallery.artworks, gallery.counter, artwork);
     }
+
+    // Function to add Artwork to gallery
+    public entry fun add_artwork_to_gallery(
+        gallery: &mut Gallery,
+        artwork: Artwork,
+        ctx: &mut TxContext
+    ) {
+        assert!(artwork.artist == tx_context::sender(ctx), NOT_THE_OWNER);
+        gallery.counter = gallery.counter +1;
+        object_table::add(&mut gallery.artworks, gallery.counter, artwork);
+    }
+    
     
     // Function to Update Artwork Properties
     public entry fun update_artwork_properties(
@@ -171,6 +183,33 @@ module digital_art_gallery::digital_art_gallery {
                 price: price,
             }
         );
+    }
+
+    // Function to get the artist of an Artwork
+    public fun get_artist(gallery: &Gallery) : address {
+        gallery.artist
+    }
+
+    // Function to fetch the Artwork Information
+    public fun get_artwork_info(gallery: &Gallery,id:u64) : (
+        String,
+        address,
+        u64,
+        u64,
+        Url,
+        String,
+        bool
+    ) {
+        let artwork = object_table::borrow(&gallery.artworks, id);
+        (
+            artwork.title,
+            artwork.artist,
+            artwork.year,
+            artwork.price,
+            artwork.img_url,
+            artwork.description,
+            artwork.for_sale,
+        )
     }
     
 
