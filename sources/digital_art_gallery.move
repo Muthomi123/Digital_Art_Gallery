@@ -76,11 +76,11 @@ module Gallery::digital_art_gallery {
     
     // Function to create Artwork
     public entry fun create_artwork(
-        title: vector<u8>,
+        title: String,
         img_url: vector<u8>,
         year: u64,
         price: u64,
-        description: vector<u8>,
+        description: String,
         gallery: &mut Gallery,
         payment: Coin<SUI>,
         ctx: &mut TxContext,
@@ -93,20 +93,20 @@ module Gallery::digital_art_gallery {
         event::emit(
             ArtCreated {
                 id: object::uid_to_inner(&id),
-                title: string::utf8(title),
+                title: title,
                 artist:tx_context::sender(ctx),
                 year: year,
-                description: string::utf8(description),
+                description: description,
             }
         );
 
         let artwork = Artwork {
             id: id,
-            title: string::utf8(title),
+            title: title,
             artist: tx_context::sender(ctx),
             year: year,
             img_url: url::new_unsafe_from_bytes(img_url),
-            description: string::utf8(description),
+            description: description,
             for_sale: true,
             price: price,
         };
@@ -129,17 +129,17 @@ module Gallery::digital_art_gallery {
     // Function to Update Artwork Properties
     public entry fun update_artwork_properties(
         artwork: &mut Artwork,
-        title: vector<u8>,
+        title: String,
         year: u64,
-        description: vector<u8>,
+        description: String,
         for_sale: bool,
         price: u64,
         user_address: address,
     ) {
         assert!(user_address == artwork.artist, NOT_THE_OWNER);
-        artwork.title = string::utf8(title);
+        artwork.title = title;
         artwork.year = year;
-        artwork.description = string::utf8(description);
+        artwork.description = description;
         artwork.for_sale = for_sale;
         artwork.price = price;
 
@@ -211,7 +211,6 @@ module Gallery::digital_art_gallery {
             artwork.for_sale,
         )
     }
-    
 
     // Function to delete an Artwork
     public entry fun delete_artwork(
@@ -235,5 +234,4 @@ module Gallery::digital_art_gallery {
     public fun init_for_testing(ctx: &mut TxContext) {
         init(ctx); 
     }
-
 }
