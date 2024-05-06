@@ -1,9 +1,9 @@
 [package]
 name = "digital_art_gallery"
-version = "0.0.1"
+version = "0.0.1.0g"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/devnet" }
 
 [addresses]
 digital_art_gallery = "0x0"
