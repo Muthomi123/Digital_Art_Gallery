@@ -1,6 +1,6 @@
 module Gallery::digital_art_gallery {
 
-    use std::string::{Self, String};
+    use std::string::{String};
     use sui::transfer;
     use sui::object::{Self, UID, ID};
     use sui::url::{Self, Url};
@@ -8,17 +8,14 @@ module Gallery::digital_art_gallery {
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
     use sui::object_table::{Self, ObjectTable};
-    use sui::kiosk;
     use sui::dynamic_field as df;
     use sui::dynamic_object_field as dof;
     use sui::event;
     use sui::tx_context::{Self, TxContext, sender};
 
-    const NOT_THE_OWNER: u64 = 0;
-    const INSUFFICIENT_FUNDS: u64 = 1;
-    const MIN_ART_PRICE: u64 = 2;
-    const ART_NOT_FOR_SALE: u64 = 3;
-    const INVALID_VALUE: u64 = 4;
+    const ERROR_NOT_THE_OWNER: u64 = 0;
+    const ERROR_INSUFFICIENT_FUNDS: u64 = 1;
+
 
     struct Artwork has key, store {
         id: UID,
@@ -64,13 +61,6 @@ module Gallery::digital_art_gallery {
         price: u64,
     }
 
-    struct ArtSold has copy, drop {
-        art_id: ID,
-        seller: address,
-        buyer: address,
-        price: u64,
-    }
-    
     struct ArtDeleted has copy, drop {
         art_id: ID,
         title: String,
@@ -135,7 +125,7 @@ module Gallery::digital_art_gallery {
         item: T,
         price: u64,
     ) {
-        assert!(object::id(self) == cap.for, NOT_THE_OWNER);
+        assert!(object::id(self) == cap.for, ERROR_NOT_THE_OWNER);
         let id = object::id(&item);
         place_internal(self, item);
         df::add(&mut self.id, Listing { id, is_exclusive: false }, price);
@@ -144,7 +134,7 @@ module Gallery::digital_art_gallery {
     public fun delist<T: key + store>(
         self: &mut Gallery, cap: &GalleryCap, id: ID
     ) : T {
-        assert!(object::id(self) == cap.for, NOT_THE_OWNER);
+        assert!(object::id(self) == cap.for, ERROR_NOT_THE_OWNER);
         self.counter = self.counter - 1;
         df::remove_if_exists<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
         dof::remove(&mut self.id, Item { id })    
@@ -157,7 +147,7 @@ module Gallery::digital_art_gallery {
         let inner = dof::remove<Item, T>(&mut self.id, Item { id });
 
         self.counter = self.counter - 1;
-        assert!(price == coin::value(&payment), INSUFFICIENT_FUNDS);
+        assert!(price == coin::value(&payment), ERROR_INSUFFICIENT_FUNDS);
         coin::put(&mut self.balance, payment);
         inner
     }
@@ -187,38 +177,14 @@ module Gallery::digital_art_gallery {
             }
         );
     }
-    
 
-    // Function to buy an Artwork
-    public entry fun buy_artwork(
-        gallery: &mut Gallery,
-        art_id: u64,
-        payment: Coin<SUI>,
-        ctx: &mut TxContext,
-    ) {
-        let artwork = object_table::remove(&mut gallery.artworks, art_id);
-        assert!(artwork.for_sale, ART_NOT_FOR_SALE);
-        let buyer = tx_context::sender(ctx);
-        let seller = artwork.artist;
-        artwork.artist = buyer;
-        artwork.for_sale = false;
-
-        let art_id = object::uid_to_inner(&artwork.id);
-        let price = artwork.price;
-
-        transfer::public_transfer(payment, seller);
-        transfer::public_transfer(artwork, buyer);
-        
-        event::emit(
-            ArtSold {
-                art_id: art_id,
-                seller: seller,
-                buyer: buyer,
-                price: price,
-            }
-        );
+      public fun withdraw(
+        self: &mut Gallery, cap: &GalleryCap, amount: u64, ctx: &mut TxContext
+    ): Coin<SUI> {
+        assert!(object::id(self) == cap.for, ERROR_NOT_THE_OWNER);
+        coin::take(&mut self.balance, amount, ctx)
     }
-
+    
     // Function to get the artist of an Artwork
     public fun get_artist(gallery: &Gallery) : address {
         gallery.owner
@@ -251,7 +217,7 @@ module Gallery::digital_art_gallery {
         artwork: Artwork,
         ctx: &mut TxContext,
     ) {
-        assert!(tx_context::sender(ctx) == artwork.artist, NOT_THE_OWNER);
+        assert!(tx_context::sender(ctx) == artwork.artist, ERROR_NOT_THE_OWNER);
         event::emit(
             ArtDeleted {
                 art_id: object::uid_to_inner(&artwork.id),
@@ -268,5 +234,4 @@ module Gallery::digital_art_gallery {
         self.counter = self.counter + 1;
         dof::add(&mut self.id, Item { id: object::id(&item) }, item)
     }
-
 }
