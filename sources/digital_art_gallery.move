@@ -4,7 +4,7 @@ module Gallery::digital_art_gallery {
     use sui::transfer;
     use sui::object::{Self, UID, ID};
     use sui::url::{Self, Url};
-    use sui::coin::{Coin};
+    use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
     use sui::object_table::{Self, ObjectTable};
@@ -15,7 +15,7 @@ module Gallery::digital_art_gallery {
     use sui::tx_context::{Self, TxContext, sender};
 
     const NOT_THE_OWNER: u64 = 0;
-    // const INSUFFICIENT_FUNDS: u64 = 1;
+    const INSUFFICIENT_FUNDS: u64 = 1;
     const MIN_ART_PRICE: u64 = 2;
     const ART_NOT_FOR_SALE: u64 = 3;
     const INVALID_VALUE: u64 = 4;
@@ -148,6 +148,18 @@ module Gallery::digital_art_gallery {
         self.counter = self.counter - 1;
         df::remove_if_exists<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
         dof::remove(&mut self.id, Item { id })    
+    }
+
+    public fun purchase<T: key + store>(
+        self: &mut Gallery, id: ID, payment: Coin<SUI>
+    ): T {
+        let price = df::remove<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
+        let inner = dof::remove<Item, T>(&mut self.id, Item { id });
+
+        self.counter = self.counter - 1;
+        assert!(price == coin::value(&payment), INSUFFICIENT_FUNDS);
+        coin::put(&mut self.balance, payment);
+        inner
     }
     
     // Function to Update Artwork Properties
