@@ -131,12 +131,23 @@ module Gallery::digital_art_gallery {
     // Function to add Artwork to gallery
     public entry fun list<T: key + store>(
         self: &mut Gallery,
+        cap: &GalleryCap,
         item: T,
         price: u64,
     ) {
+        assert!(object::id(self) == cap.for, NOT_THE_OWNER);
         let id = object::id(&item);
         place_internal(self, item);
         df::add(&mut self.id, Listing { id, is_exclusive: false }, price);
+    }
+
+    public fun delist<T: key + store>(
+        self: &mut Gallery, cap: &GalleryCap, id: ID
+    ) : T {
+        assert!(object::id(self) == cap.for, NOT_THE_OWNER);
+        self.counter = self.counter - 1;
+        df::remove_if_exists<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
+        dof::remove(&mut self.id, Item { id })    
     }
     
     // Function to Update Artwork Properties
