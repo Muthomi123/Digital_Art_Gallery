@@ -9,6 +9,8 @@ module Gallery::digital_art_gallery {
     use sui::sui::SUI;
     use sui::object_table::{Self, ObjectTable};
     use sui::kiosk;
+    use sui::dynamic_field as df;
+    use sui::dynamic_object_field as dof;
     use sui::event;
     use sui::tx_context::{Self, TxContext, sender};
 
@@ -41,6 +43,10 @@ module Gallery::digital_art_gallery {
         id: UID,
         for: ID
     }
+
+    struct Listing has store, copy, drop { id: ID, is_exclusive: bool }
+
+    struct Item has store, copy, drop { id: ID }
 
     struct ArtCreated has copy, drop {
         id: ID,
@@ -123,16 +129,15 @@ module Gallery::digital_art_gallery {
     }
 
     // Function to add Artwork to gallery
-    public entry fun add_artwork_to_gallery(
-        gallery: &mut Gallery,
-        artwork: Artwork,
-        ctx: &mut TxContext
+    public entry fun list<T: key + store>(
+        self: &mut Gallery,
+        item: T,
+        price: u64,
     ) {
-        assert!(artwork.artist == tx_context::sender(ctx), NOT_THE_OWNER);
-        gallery.counter = gallery.counter +1;
-        object_table::add(&mut gallery.artworks, gallery.counter, artwork);
+        let id = object::id(&item);
+        place_internal(self, item);
+        df::add(&mut self.id, Listing { id, is_exclusive: false }, price);
     }
-    
     
     // Function to Update Artwork Properties
     public entry fun update_artwork_properties(
@@ -142,9 +147,7 @@ module Gallery::digital_art_gallery {
         description: String,
         for_sale: bool,
         price: u64,
-        user_address: address,
     ) {
-        assert!(user_address == artwork.artist, NOT_THE_OWNER);
         artwork.title = title;
         artwork.year = year;
         artwork.description = description;
@@ -236,6 +239,11 @@ module Gallery::digital_art_gallery {
 
         let Artwork { id, title:_, artist:_, year:_, price:_, img_url:_, description:_, for_sale:_} = artwork;
         object::delete(id);
+    }
+
+    public fun place_internal<T: key + store>(self: &mut Gallery, item: T) {
+        self.counter = self.counter + 1;
+        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
     }
 
 }
