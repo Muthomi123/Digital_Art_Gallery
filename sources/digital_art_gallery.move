@@ -1,4 +1,4 @@
-module digital_art_gallery::digital_art_gallery {
+module Gallery::digital_art_gallery {
 
     use std::string::{Self, String};
     use sui::transfer;
