@@ -5,10 +5,12 @@ module Gallery::digital_art_gallery {
     use sui::object::{Self, UID, ID};
     use sui::url::{Self, Url};
     use sui::coin::{Coin};
+    use sui::balance::{Self, Balance};
     use sui::sui::SUI;
     use sui::object_table::{Self, ObjectTable};
+    use sui::kiosk;
     use sui::event;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext, sender};
 
     const NOT_THE_OWNER: u64 = 0;
     // const INSUFFICIENT_FUNDS: u64 = 1;
@@ -29,9 +31,15 @@ module Gallery::digital_art_gallery {
 
     struct Gallery has key, store {
         id: UID,
-        artist: address,
+        owner: address,
+        balance: Balance<SUI>,
         counter: u64,
         artworks: ObjectTable<u64, Artwork>,
+    }
+
+    struct GalleryCap has key, store {
+        id: UID,
+        for: ID
     }
 
     struct ArtCreated has copy, drop {
@@ -63,15 +71,22 @@ module Gallery::digital_art_gallery {
         artist: address,
     }
 
-    fun init(ctx: &mut TxContext) {
+    public fun new(ctx: &mut TxContext) : GalleryCap {
+        let id_ = object::new(ctx);
+        let inner_ = object::uid_to_inner(&id_);
         transfer::share_object(
             Gallery {
-                id: object::new(ctx),
-                artist: tx_context::sender(ctx),
+                id: id_,
+                owner: sender(ctx),
+                balance: balance::zero(),
                 counter: 0,
                 artworks: object_table::new(ctx),
             }
-        )
+        );
+        GalleryCap {
+            id: object::new(ctx),
+            for: inner_
+        }
     }
     
     // Function to create Artwork
@@ -187,7 +202,7 @@ module Gallery::digital_art_gallery {
 
     // Function to get the artist of an Artwork
     public fun get_artist(gallery: &Gallery) : address {
-        gallery.artist
+        gallery.owner
     }
 
     // Function to fetch the Artwork Information
