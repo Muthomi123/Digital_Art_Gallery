@@ -90,21 +90,16 @@ module Gallery::digital_art_gallery {
     }
     
     // Function to create Artwork
-    public entry fun create_artwork(
+    public fun mint(
         title: String,
         img_url: vector<u8>,
         year: u64,
         price: u64,
         description: String,
-        gallery: &mut Gallery,
-        payment: Coin<SUI>,
         ctx: &mut TxContext,
-    ) {
-        assert!(price > MIN_ART_PRICE, INVALID_VALUE);
-        transfer::public_transfer(payment, gallery.artist);
-        gallery.counter = gallery.counter +1;
-        let id = object::new(ctx);
+    ) : Artwork {
 
+        let id = object::new(ctx);
         event::emit(
             ArtCreated {
                 id: object::uid_to_inner(&id),
@@ -115,7 +110,7 @@ module Gallery::digital_art_gallery {
             }
         );
 
-        let artwork = Artwork {
+        Artwork {
             id: id,
             title: title,
             artist: tx_context::sender(ctx),
@@ -124,9 +119,7 @@ module Gallery::digital_art_gallery {
             description: description,
             for_sale: true,
             price: price,
-        };
-
-        object_table::add(&mut gallery.artworks, gallery.counter, artwork);
+        }
     }
 
     // Function to add Artwork to gallery
@@ -245,8 +238,4 @@ module Gallery::digital_art_gallery {
         object::delete(id);
     }
 
-    #[test_only]
-    public fun init_for_testing(ctx: &mut TxContext) {
-        init(ctx); 
-    }
 }
