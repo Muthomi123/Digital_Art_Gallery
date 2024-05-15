@@ -115,7 +115,7 @@ module digital_art_gallery::digital_art_gallery {
             price: price,
         };
 
-        object_table::add(&mut gallery.artworks, gallery.counter, object::uid_to_inner(&id));
+        object_table::add(&mut gallery.artworks, gallery.counter, art_id);
         transfer::share_object(artwork);
     }
 
@@ -131,7 +131,7 @@ module digital_art_gallery::digital_art_gallery {
         ctx: &mut TxContext,
     ) {
         let artwork_id = object_table::borrow(&gallery.artworks, art_id);
-        let artwork = transfer::borrow_object<Artwork>(artwork_id);
+        let mut artwork = transfer::borrow_mut<Artwork>(artwork_id);
 
         assert!(tx_context::sender(ctx) == artwork.artist, NOT_THE_OWNER);
         artwork.title = string::utf8(title);
@@ -151,7 +151,6 @@ module digital_art_gallery::digital_art_gallery {
             }
         );
     }
-    
 
     // Function to buy an Artwork
     public entry fun buy_artwork(
@@ -161,7 +160,7 @@ module digital_art_gallery::digital_art_gallery {
         ctx: &mut TxContext,
     ) {
         let artwork_id = object_table::remove(&mut gallery.artworks, art_id);
-        let artwork = transfer::transfer(artwork_id, tx_context::sender(ctx));
+        let mut artwork = transfer::borrow_mut<Artwork>(artwork_id);
 
         assert!(artwork.for_sale, ART_NOT_FOR_SALE);
         let buyer = tx_context::sender(ctx);
@@ -219,7 +218,7 @@ module digital_art_gallery::digital_art_gallery {
         ctx: &mut TxContext,
     ) {
         let artwork_id = object_table::remove(&mut gallery.artworks, art_id);
-        let artwork = transfer::transfer(artwork_id, tx_context::sender(ctx));
+        let artwork = transfer::borrow_object<Artwork>(artwork_id);
 
         assert!(tx_context::sender(ctx) == artwork.artist, NOT_THE_OWNER);
         event::emit(
@@ -233,7 +232,7 @@ module digital_art_gallery::digital_art_gallery {
         object::delete(artwork.id);
     }
 
-    //Function to mint new SUI tokens
+    // Function to mint new SUI tokens
     public fun mint_sui(
         amount: u64,
         recipient: address,
@@ -256,5 +255,4 @@ module digital_art_gallery::digital_art_gallery {
     public fun init_for_testing(ctx: &mut TxContext) {
         init(ctx); 
     }
-
 }
