@@ -1,20 +1,19 @@
 module digital_art_gallery::digital_art_gallery {
-
     use std::string::{Self, String};
     use sui::transfer;
     use sui::object::{Self, UID, ID};
     use sui::url::{Self, Url};
-    use sui::coin::{Coin};
+    use sui::coin::{Coin, TreasuryCap};
     use sui::sui::SUI;
     use sui::object_table::{Self, ObjectTable};
     use sui::event;
     use sui::tx_context::{Self, TxContext};
 
     const NOT_THE_OWNER: u64 = 0;
-    // const INSUFFICIENT_FUNDS: u64 = 1;
     const MIN_ART_PRICE: u64 = 2;
     const ART_NOT_FOR_SALE: u64 = 3;
     const INVALID_VALUE: u64 = 4;
+    const ART_ALREADY_EXISTS: u64 = 5;
 
     struct Artwork has key, store {
         id: UID,
@@ -31,7 +30,7 @@ module digital_art_gallery::digital_art_gallery {
         id: UID,
         artist: address,
         counter: u64,
-        artworks: ObjectTable<u64, Artwork>,
+        artworks: ObjectTable<u64, ID>,
     }
 
     struct ArtCreated has copy, drop {
@@ -43,6 +42,7 @@ module digital_art_gallery::digital_art_gallery {
     }
 
     struct ArtUpdated has copy, drop {
+        id: ID,
         title: String,
         year: u64,
         description: String,
@@ -56,7 +56,7 @@ module digital_art_gallery::digital_art_gallery {
         buyer: address,
         price: u64,
     }
-    
+
     struct ArtDeleted has copy, drop {
         art_id: ID,
         title: String,
@@ -73,7 +73,7 @@ module digital_art_gallery::digital_art_gallery {
             }
         )
     }
-    
+
     // Function to create Artwork
     public entry fun create_artwork(
         title: vector<u8>,
@@ -87,14 +87,18 @@ module digital_art_gallery::digital_art_gallery {
     ) {
         assert!(price > MIN_ART_PRICE, INVALID_VALUE);
         transfer::public_transfer(payment, gallery.artist);
-        gallery.counter = gallery.counter +1;
         let id = object::new(ctx);
+        let art_id = object::uid_to_inner(&id);
+
+        assert!(!object_table::contains(&gallery.artworks, art_id), ART_ALREADY_EXISTS);
+
+        gallery.counter = gallery.counter + 1;
 
         event::emit(
             ArtCreated {
-                id: object::uid_to_inner(&id),
+                id: art_id,
                 title: string::utf8(title),
-                artist:tx_context::sender(ctx),
+                artist: tx_context::sender(ctx),
                 year: year,
                 description: string::utf8(description),
             }
@@ -111,32 +115,25 @@ module digital_art_gallery::digital_art_gallery {
             price: price,
         };
 
-        object_table::add(&mut gallery.artworks, gallery.counter, artwork);
+        object_table::add(&mut gallery.artworks, gallery.counter, art_id);
+        transfer::share_object(artwork);
     }
 
-    // Function to add Artwork to gallery
-    public entry fun add_artwork_to_gallery(
-        gallery: &mut Gallery,
-        artwork: Artwork,
-        ctx: &mut TxContext
-    ) {
-        assert!(artwork.artist == tx_context::sender(ctx), NOT_THE_OWNER);
-        gallery.counter = gallery.counter +1;
-        object_table::add(&mut gallery.artworks, gallery.counter, artwork);
-    }
-    
-    
     // Function to Update Artwork Properties
     public entry fun update_artwork_properties(
-        artwork: &mut Artwork,
+        gallery: &mut Gallery,
+        art_id: u64,
         title: vector<u8>,
         year: u64,
         description: vector<u8>,
         for_sale: bool,
         price: u64,
-        user_address: address,
+        ctx: &mut TxContext,
     ) {
-        assert!(user_address == artwork.artist, NOT_THE_OWNER);
+        let artwork_id = object_table::borrow(&gallery.artworks, art_id);
+        let mut artwork = transfer::borrow_mut<Artwork>(artwork_id);
+
+        assert!(tx_context::sender(ctx) == artwork.artist, NOT_THE_OWNER);
         artwork.title = string::utf8(title);
         artwork.year = year;
         artwork.description = string::utf8(description);
@@ -145,6 +142,7 @@ module digital_art_gallery::digital_art_gallery {
 
         event::emit(
             ArtUpdated {
+                id: object::uid_to_inner(&artwork.id),
                 title: artwork.title,
                 year: artwork.year,
                 description: artwork.description,
@@ -153,7 +151,6 @@ module digital_art_gallery::digital_art_gallery {
             }
         );
     }
-    
 
     // Function to buy an Artwork
     public entry fun buy_artwork(
@@ -162,7 +159,9 @@ module digital_art_gallery::digital_art_gallery {
         payment: Coin<SUI>,
         ctx: &mut TxContext,
     ) {
-        let artwork = object_table::remove(&mut gallery.artworks, art_id);
+        let artwork_id = object_table::remove(&mut gallery.artworks, art_id);
+        let mut artwork = transfer::borrow_mut<Artwork>(artwork_id);
+
         assert!(artwork.for_sale, ART_NOT_FOR_SALE);
         let buyer = tx_context::sender(ctx);
         let seller = artwork.artist;
@@ -173,8 +172,7 @@ module digital_art_gallery::digital_art_gallery {
         let price = artwork.price;
 
         transfer::public_transfer(payment, seller);
-        transfer::public_transfer(artwork, buyer);
-        
+
         event::emit(
             ArtSold {
                 art_id: art_id,
@@ -186,12 +184,12 @@ module digital_art_gallery::digital_art_gallery {
     }
 
     // Function to get the artist of an Artwork
-    public fun get_artist(gallery: &Gallery) : address {
+    public fun get_artist(gallery: &Gallery): address {
         gallery.artist
     }
 
     // Function to fetch the Artwork Information
-    public fun get_artwork_info(gallery: &Gallery,id:u64) : (
+    public fun get_artwork_info(gallery: &Gallery, id: u64): (
         String,
         address,
         u64,
@@ -200,7 +198,8 @@ module digital_art_gallery::digital_art_gallery {
         String,
         bool
     ) {
-        let artwork = object_table::borrow(&gallery.artworks, id);
+        let artwork_id = object_table::borrow(&gallery.artworks, id);
+        let artwork = transfer::borrow_object<Artwork>(artwork_id);
         (
             artwork.title,
             artwork.artist,
@@ -211,13 +210,16 @@ module digital_art_gallery::digital_art_gallery {
             artwork.for_sale,
         )
     }
-    
 
     // Function to delete an Artwork
     public entry fun delete_artwork(
-        artwork: Artwork,
+        gallery: &mut Gallery,
+        art_id: u64,
         ctx: &mut TxContext,
     ) {
+        let artwork_id = object_table::remove(&mut gallery.artworks, art_id);
+        let artwork = transfer::borrow_object<Artwork>(artwork_id);
+
         assert!(tx_context::sender(ctx) == artwork.artist, NOT_THE_OWNER);
         event::emit(
             ArtDeleted {
@@ -227,13 +229,30 @@ module digital_art_gallery::digital_art_gallery {
             }
         );
 
-        let Artwork { id, title:_, artist:_, year:_, price:_, img_url:_, description:_, for_sale:_} = artwork;
-        object::delete(id);
+        object::delete(artwork.id);
+    }
+
+    // Function to mint new SUI tokens
+    public fun mint_sui(
+        amount: u64,
+        recipient: address,
+        ctx: &mut TxContext
+    ) {
+        use sui::coin;
+        use sui::tx_context::{Self, TxContext};
+
+        let (treasury_cap, metadata) = coin::take_immutable_ownership<SUI, TreasuryCap>(ctx);
+        let coins = coin::mint_and_transfer(&mut treasury_cap, amount, metadata, recipient, ctx);
+        coin::deposit_all(coins, recipient, ctx);
+    }
+
+    // Function to check if an Artwork exists in the gallery
+    public fun artwork_exists(gallery: &Gallery, art_id: u64): bool {
+        object_table::contains(&gallery.artworks, art_id)
     }
 
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {
         init(ctx); 
     }
-
 }
